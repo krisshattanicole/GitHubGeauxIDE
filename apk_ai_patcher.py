@@ -109,8 +109,8 @@ def sign_apk(apk_path):
         subprocess.run(cmd, check=True, capture_output=True, text=True)
     else:
         # fallback to jarsigner
-        subprocess.run(["jarsigner", "-verbose", "-sigalg", "SHA1withRSA",
-                        "-digestalg", "SHA1", "-keystore", KEYSTORE_PATH,
+        subprocess.run(["jarsigner", "-verbose", "-sigalg", "SHA256withRSA",
+                        "-digestalg", "SHA-256", "-keystore", KEYSTORE_PATH,
                         "-storepass", KEYSTORE_PASS, "-keypass", KEYSTORE_PASS,
                         apk_path, KEY_ALIAS], check=True)
 
@@ -126,10 +126,14 @@ def ask_ai_for_patches(work_dir, user_request):
     smali_files = list(Path(work_dir).rglob("*.smali"))
     # Build context: for each smali file, include its path and first 50 lines (to keep prompt size manageable)
     context = ""
+    if len(smali_files) > MAX_SMALI_FILES_FOR_CONTEXT:
+        print(f"[!] Limiting AI context to {MAX_SMALI_FILES_FOR_CONTEXT} of {len(smali_files)} smali files.")
     for smali in smali_files[:MAX_SMALI_FILES_FOR_CONTEXT]:  # limit to avoid huge prompts
         rel_path = smali.relative_to(work_dir)
         with open(smali, "r", encoding="utf-8", errors="ignore") as f:
             content = f.read(MAX_CHARS_PER_FILE)  # first chunk per file
+        if smali.stat().st_size > MAX_CHARS_PER_FILE:
+            print(f"[!] Truncated AI context for {rel_path} to {MAX_CHARS_PER_FILE} characters.")
         context += f"\n--- FILE: {rel_path} ---\n{content}\n"
 
     prompt = f"""You are an expert in Android smali code. Given the following smali files from an APK, 
@@ -140,7 +144,7 @@ User request: {user_request}
 Files content:
 {context}
 
-Respond ONLY with a JSON array in this exact format:
+Respond ONLY with a JSON array in this exact format (line numbers are 1-indexed):
 [
   {{
     "file": "path/relative/to/workdir/file.smali",
@@ -170,16 +174,16 @@ Make sure the new_content is valid smali.
             patches = json.loads(json_str)
             return patches
         else:
-            return {"error": "No JSON found in AI response"}
+            raise RuntimeError("No JSON found in AI response")
     except Exception as e:
-        return {"error": str(e)}
+        raise RuntimeError(str(e)) from e
 
 
 def apply_patches(work_dir, patches):
     work_dir_path = Path(work_dir).resolve()
     for p in patches:
         file_path = (Path(work_dir) / p["file"]).resolve()
-        if not str(file_path).startswith(f"{work_dir_path}{os.sep}"):
+        if work_dir_path not in file_path.parents:
             print(f"[!] Skipping patch for unsafe path: {p.get('file')}")
             continue
         if not file_path.exists():
@@ -267,11 +271,6 @@ class APKPatcherApp:
                 # Ask AI for patches
                 self.log_message("[2] Asking AI (Ollama) for patches...")
                 patches = ask_ai_for_patches(work_dir, description)
-                if isinstance(patches, dict) and "error" in patches:
-                    self.log_message(f"    AI error: {patches['error']}")
-                    self.status.config(text="Error")
-                    messagebox.showerror("Error", patches["error"])
-                    return
                 self.log_message(f"    AI returned {len(patches)} modifications.")
 
                 # Apply patches
