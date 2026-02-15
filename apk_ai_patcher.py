@@ -131,7 +131,7 @@ def ask_ai_for_patches(work_dir, user_request):
         print(f"[!] Limiting AI context to {MAX_SMALI_FILES_FOR_CONTEXT} of {len(smali_files)} smali files.")
     for smali in smali_files[:MAX_SMALI_FILES_FOR_CONTEXT]:  # limit to avoid huge prompts
         rel_path = smali.relative_to(work_dir)
-        with open(smali, "r", encoding="utf-8", errors="ignore") as f:
+        with open(smali, "r", encoding="utf-8", errors="replace") as f:
             content = f.read(MAX_CHARS_PER_FILE)  # first chunk per file
         if smali.stat().st_size > MAX_CHARS_PER_FILE:
             print(f"[!] Truncated AI context for {rel_path} to {MAX_CHARS_PER_FILE} characters.")
@@ -175,7 +175,8 @@ Make sure the new_content is valid smali.
             patches = json.loads(json_str)
             return patches
         else:
-            raise RuntimeError("No JSON found in AI response")
+            preview = response_text[:200].replace("\n", " ")
+            raise RuntimeError(f"No JSON found in AI response (length {len(response_text)}): {preview}")
     except Exception as e:
         raise RuntimeError(str(e)) from e
 
@@ -195,12 +196,15 @@ def apply_patches(work_dir, patches):
         with open(file_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
         line_no = p["line"] - 1  # to 0-index
+        updated = False
         if 0 <= line_no < len(lines):
             lines[line_no] = p["new_content"] + "\n"
+            updated = True
         else:
             print(f"[!] Patch line out of range: {p['file']}:{p['line']}")
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.writelines(lines)
+        if updated:
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.writelines(lines)
 
 # ----------------------------------------------------------------------
 # GUI Application
@@ -296,8 +300,9 @@ class APKPatcherApp:
                 self.log_message("    Signing done.")
 
                 # Move final APK to original folder with "_patched" suffix
-                final_name = apk_path.replace(".apk", "_patched.apk")
-                shutil.move(unsigned_apk, final_name)
+                final_path = Path(apk_path)
+                final_name = final_path.with_name(f"{final_path.stem}_patched{final_path.suffix}")
+                shutil.move(unsigned_apk, str(final_name))
                 self.log_message(f"[✓] Success! Patched APK saved as: {final_name}")
 
                 self.status.config(text="Completed")
