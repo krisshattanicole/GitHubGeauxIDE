@@ -19,8 +19,8 @@ import requests
 # ----------------------------------------------------------------------
 # CONFIGURATION - ADJUST THESE PATHS TO MATCH YOUR SYSTEM
 # ----------------------------------------------------------------------
-APKTOOL_PATH = os.environ.get("APKTOOL_PATH", r"C:\tools\apktool.jar")  # Path to apktool.jar
-ANDROID_SDK_PATH = os.environ.get("ANDROID_SDK_ROOT", os.environ.get("ANDROID_HOME", r"C:\Android\Sdk"))  # Android SDK root
+APKTOOL_PATH = os.environ.get("APKTOOL_PATH", r"C:\tools\apktool.jar")  # Set APKTOOL_PATH or update for macOS/Linux
+ANDROID_SDK_PATH = os.environ.get("ANDROID_SDK_ROOT", os.environ.get("ANDROID_HOME", r"C:\Android\Sdk"))  # Set env var or update for macOS/Linux
 BUILD_TOOLS_VERSION = "34.0.0"                  # Adjust to your installed version
 KEYSTORE_PATH = os.path.expanduser("~/.android/debug.keystore")
 KEYSTORE_PASS = "android"
@@ -125,7 +125,7 @@ def ask_ai_for_patches(work_dir, user_request):
     Expects a JSON response with list of modifications.
     """
     smali_files = list(Path(work_dir).rglob("*.smali"))
-    # Build context: for each smali file, include its path and first 50 lines (to keep prompt size manageable)
+    # Build context: for each smali file, include its path and a character-limited preview.
     context = ""
     if len(smali_files) > MAX_SMALI_FILES_FOR_CONTEXT:
         print(f"[!] Limiting AI context to {MAX_SMALI_FILES_FOR_CONTEXT} of {len(smali_files)} smali files.")
@@ -307,16 +307,16 @@ class APKPatcherApp:
                 # Move final APK to original folder with "_patched" suffix
                 apk_file = Path(apk_path)
                 final_path = apk_file.with_name(f"{apk_file.stem}_patched{apk_file.suffix}")
-                final_name = final_path
+                output_path = final_path
                 counter = 1
-                while final_name.exists():
-                    final_name = final_path.with_name(f"{final_path.stem}_{counter}{final_path.suffix}")
+                while output_path.exists():
+                    output_path = final_path.with_name(f"{final_path.stem}_{counter}{final_path.suffix}")
                     counter += 1
-                shutil.move(unsigned_apk, str(final_name))
-                self.log_message(f"[✓] Success! Patched APK saved as: {final_name}")
+                shutil.move(unsigned_apk, str(output_path))
+                self.log_message(f"[✓] Success! Patched APK saved as: {output_path}")
 
                 self.status.config(text="Completed")
-                messagebox.showinfo("Success", f"Patched APK saved as:\n{final_name}")
+                messagebox.showinfo("Success", f"Patched APK saved as:\n{output_path}")
         except Exception as e:
             self.log_message(f"ERROR: {str(e)}")
             self.status.config(text="Error")
@@ -331,7 +331,7 @@ if __name__ == "__main__":
     if not os.path.isfile(APKTOOL_PATH):
         missing.append("Apktool.jar (update APKTOOL_PATH)")
     if not APKSIGNER:
-        missing.append("apksigner (update ANDROID_SDK_PATH or BUILD_TOOLS_VERSION)")
+        missing.append("apksigner (verify Android SDK install, ANDROID_SDK_PATH, and BUILD_TOOLS_VERSION)")
     if missing:
         print("Missing dependencies:\n" + "\n".join(missing))
         print("Please adjust the paths at the top of the script.")
