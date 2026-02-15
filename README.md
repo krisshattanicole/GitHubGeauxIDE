@@ -33,6 +33,32 @@ Services currently supported:
 * Clone in Windsurf Next (locally)
 * Clone in Kiro (locally)
 
+## APK AI Patcher (Local App)
+
+This repository also includes a standalone GUI utility (`apk_ai_patcher.py`) that can unpack, AI-patch, rebuild, and sign APKs in one click using a local Ollama model.
+
+**Highlights**
+* One-click decode → AI patch → rebuild → sign.
+* Local AI agent via Ollama (describe changes in plain English).
+* Automatic signing with a debug keystore if none exists.
+* Works on Windows / macOS / Linux (requires Java + Android build tools).
+
+**Prerequisites (install once)**
+1. Java (JDK 8+)
+2. Android SDK build tools (for `apksigner` + `zipalign`)
+3. Apktool (`apktool.jar`)
+4. Ollama with a code model (e.g., `ollama pull codellama:13b`)
+5. Python 3.8+ with `requests` (`pip install -r requirements.txt`)
+
+**Run it**
+1. Update the configuration paths at the top of `apk_ai_patcher.py` (APKTOOL_PATH, ANDROID_SDK_PATH).
+2. Start Ollama (`ollama serve`).
+3. Run the script:
+   ```bash
+   python apk_ai_patcher.py
+   ```
+4. Use the GUI to select an APK, describe the patch, and click **Run AI Patch (One Click)**. The patched APK is saved with a `_patched` suffix.
+
 
 ### What's changed?
 * v2.0.14 Styles fix for settings page.
