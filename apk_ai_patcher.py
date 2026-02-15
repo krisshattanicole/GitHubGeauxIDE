@@ -176,7 +176,15 @@ Make sure the new_content is valid smali.
             return patches
         else:
             preview = response_text[:200].replace("\n", " ")
-            raise RuntimeError(f"No JSON found in AI response (length {len(response_text)}): {preview}")
+            suffix = "..." if len(response_text) > 200 else ""
+            raise RuntimeError(f"No JSON found in AI response (length {len(response_text)}): {preview}{suffix}")
+    except requests.exceptions.RequestException as e:
+        details = ""
+        if e.response is not None:
+            response_preview = e.response.text[:200].replace("\n", " ")
+            response_suffix = "..." if len(e.response.text) > 200 else ""
+            details = f" (status {e.response.status_code}: {response_preview}{response_suffix})"
+        raise RuntimeError(f"Ollama request failed{details}") from e
     except Exception as e:
         raise RuntimeError(str(e)) from e
 
@@ -196,15 +204,12 @@ def apply_patches(work_dir, patches):
         with open(file_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
         line_no = p["line"] - 1  # to 0-index
-        updated = False
         if 0 <= line_no < len(lines):
             lines[line_no] = p["new_content"] + "\n"
-            updated = True
-        else:
-            print(f"[!] Patch line out of range: {p['file']}:{p['line']}")
-        if updated:
             with open(file_path, "w", encoding="utf-8") as f:
                 f.writelines(lines)
+        else:
+            print(f"[!] Patch line out of range: {p['file']}:{p['line']}")
 
 # ----------------------------------------------------------------------
 # GUI Application
@@ -300,8 +305,13 @@ class APKPatcherApp:
                 self.log_message("    Signing done.")
 
                 # Move final APK to original folder with "_patched" suffix
-                final_path = Path(apk_path)
-                final_name = final_path.with_name(f"{final_path.stem}_patched{final_path.suffix}")
+                apk_file = Path(apk_path)
+                final_path = apk_file.with_name(f"{apk_file.stem}_patched{apk_file.suffix}")
+                final_name = final_path
+                counter = 1
+                while final_name.exists():
+                    final_name = final_path.with_name(f"{final_path.stem}_{counter}{final_path.suffix}")
+                    counter += 1
                 shutil.move(unsigned_apk, str(final_name))
                 self.log_message(f"[✓] Success! Patched APK saved as: {final_name}")
 
