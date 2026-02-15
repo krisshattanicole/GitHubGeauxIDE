@@ -19,14 +19,15 @@ import requests
 # ----------------------------------------------------------------------
 # CONFIGURATION - ADJUST THESE PATHS TO MATCH YOUR SYSTEM
 # ----------------------------------------------------------------------
-APKTOOL_PATH = r"C:\tools\apktool.jar"          # Path to apktool.jar
-ANDROID_SDK_PATH = r"C:\Android\Sdk"            # Android SDK root
+APKTOOL_PATH = os.environ.get("APKTOOL_PATH", r"C:\tools\apktool.jar")  # Path to apktool.jar
+ANDROID_SDK_PATH = os.environ.get("ANDROID_SDK_ROOT", os.environ.get("ANDROID_HOME", r"C:\Android\Sdk"))  # Android SDK root
 BUILD_TOOLS_VERSION = "34.0.0"                  # Adjust to your installed version
 KEYSTORE_PATH = os.path.expanduser("~/.android/debug.keystore")
 KEYSTORE_PASS = "android"
 KEY_ALIAS = "androiddebugkey"
 OLLAMA_URL = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = "codellama:13b"                   # or "codellama:7b", "llama3", etc.
+OLLAMA_TIMEOUT = 120
 MAX_SMALI_FILES_FOR_CONTEXT = 20
 MAX_CHARS_PER_FILE = 5000
 
@@ -162,7 +163,7 @@ Make sure the new_content is valid smali.
         "format": "json"
     }
     try:
-        resp = requests.post(OLLAMA_URL, json=payload, timeout=120)
+        resp = requests.post(OLLAMA_URL, json=payload, timeout=OLLAMA_TIMEOUT)
         resp.raise_for_status()
         data = resp.json()
         response_text = data.get("response", "")
@@ -183,7 +184,9 @@ def apply_patches(work_dir, patches):
     work_dir_path = Path(work_dir).resolve()
     for p in patches:
         file_path = (Path(work_dir) / p["file"]).resolve()
-        if work_dir_path not in file_path.parents:
+        try:
+            file_path.relative_to(work_dir_path)
+        except ValueError:
             print(f"[!] Skipping patch for unsafe path: {p.get('file')}")
             continue
         if not file_path.exists():
@@ -225,7 +228,7 @@ class APKPatcherApp:
         self.run_btn.pack(pady=10)
 
         # Log output
-        self.log = scrolledtext.ScrolledText(root, height=20, state='normal')
+        self.log = scrolledtext.ScrolledText(root, height=20, state='disabled')
         self.log.pack(pady=10, fill=tk.BOTH, expand=True)
 
         # Status bar
@@ -238,8 +241,10 @@ class APKPatcherApp:
             self.apk_path_var.set(filename)
 
     def log_message(self, msg):
+        self.log.config(state='normal')
         self.log.insert(tk.END, msg + "\n")
         self.log.see(tk.END)
+        self.log.config(state='disabled')
         self.root.update()
 
     def run_patch(self):

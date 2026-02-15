@@ -35,10 +35,10 @@ Services currently supported:
 
 ## APK AI Patcher (Local App)
 
-This repository also includes a standalone GUI utility (`apk_ai_patcher.py`) that can unpack, AI‑patch, rebuild, and sign APKs in one click using a local Ollama model.
+This repository also includes a standalone GUI utility (`apk_ai_patcher.py`) that can unpack, AI-patch, rebuild, and sign APKs in one click using a local Ollama model.
 
 **Highlights**
-* One‑click decode → AI patch → rebuild → sign.
+* One-click decode → AI patch → rebuild → sign.
 * Local AI agent via Ollama (describe changes in plain English).
 * Automatic signing with a debug keystore if none exists.
 * Works on Windows / macOS / Linux (requires Java + Android build tools).
