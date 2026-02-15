@@ -27,6 +27,8 @@ KEYSTORE_PASS = "android"
 KEY_ALIAS = "androiddebugkey"
 OLLAMA_URL = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = "codellama:13b"                   # or "codellama:7b", "llama3", etc.
+MAX_SMALI_FILES_FOR_CONTEXT = 20
+MAX_CHARS_PER_FILE = 5000
 
 # ----------------------------------------------------------------------
 # Helper functions to locate SDK tools
@@ -124,10 +126,10 @@ def ask_ai_for_patches(work_dir, user_request):
     smali_files = list(Path(work_dir).rglob("*.smali"))
     # Build context: for each smali file, include its path and first 50 lines (to keep prompt size manageable)
     context = ""
-    for smali in smali_files[:20]:  # limit to 20 files to avoid huge prompts
+    for smali in smali_files[:MAX_SMALI_FILES_FOR_CONTEXT]:  # limit to avoid huge prompts
         rel_path = smali.relative_to(work_dir)
         with open(smali, "r", encoding="utf-8", errors="ignore") as f:
-            content = f.read(5000)  # first 5000 chars per file
+            content = f.read(MAX_CHARS_PER_FILE)  # first chunk per file
         context += f"\n--- FILE: {rel_path} ---\n{content}\n"
 
     prompt = f"""You are an expert in Android smali code. Given the following smali files from an APK, 
@@ -178,14 +180,18 @@ def apply_patches(work_dir, patches):
     for p in patches:
         file_path = (Path(work_dir) / p["file"]).resolve()
         if not str(file_path).startswith(f"{work_dir_path}{os.sep}"):
+            print(f"[!] Skipping patch for unsafe path: {p.get('file')}")
             continue
         if not file_path.exists():
+            print(f"[!] Patch file not found: {file_path}")
             continue
         with open(file_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
         line_no = p["line"] - 1  # to 0-index
         if 0 <= line_no < len(lines):
             lines[line_no] = p["new_content"] + "\n"
+        else:
+            print(f"[!] Patch line out of range: {p['file']}:{p['line']}")
         with open(file_path, "w", encoding="utf-8") as f:
             f.writelines(lines)
 
@@ -263,6 +269,8 @@ class APKPatcherApp:
                 patches = ask_ai_for_patches(work_dir, description)
                 if isinstance(patches, dict) and "error" in patches:
                     self.log_message(f"    AI error: {patches['error']}")
+                    self.status.config(text="Error")
+                    messagebox.showerror("Error", patches["error"])
                     return
                 self.log_message(f"    AI returned {len(patches)} modifications.")
 
