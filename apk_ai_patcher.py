@@ -132,7 +132,14 @@ def ask_ai_for_patches(work_dir, user_request):
     for smali in smali_files[:MAX_SMALI_FILES_FOR_CONTEXT]:  # limit to avoid huge prompts
         rel_path = smali.relative_to(work_dir)
         with open(smali, "r", encoding="utf-8", errors="replace") as f:
-            content = f.read(MAX_CHARS_PER_FILE)  # first chunk per file
+            content_parts = []
+            current_len = 0
+            for line in f:
+                if current_len + len(line) > MAX_CHARS_PER_FILE:
+                    break
+                content_parts.append(line)
+                current_len += len(line)
+            content = "".join(content_parts)
         if smali.stat().st_size > MAX_CHARS_PER_FILE:
             print(f"[!] Truncated AI context for {rel_path} to {MAX_CHARS_PER_FILE} characters.")
         context += f"\n--- FILE: {rel_path} ---\n{content}\n"
@@ -205,7 +212,10 @@ def apply_patches(work_dir, patches):
             lines = f.readlines()
         line_no = p["line"] - 1  # to 0-index
         if 0 <= line_no < len(lines):
-            lines[line_no] = p["new_content"] + "\n"
+            replacement_lines = p["new_content"].splitlines()
+            if not replacement_lines:
+                replacement_lines = [""]
+            lines[line_no:line_no + 1] = [line + "\n" for line in replacement_lines]
             with open(file_path, "w", encoding="utf-8") as f:
                 f.writelines(lines)
         else:
@@ -329,7 +339,7 @@ if __name__ == "__main__":
     # Quick checks for required tools
     missing = []
     if not os.path.isfile(APKTOOL_PATH):
-        missing.append("Apktool.jar (update APKTOOL_PATH)")
+        missing.append("APKTOOL_PATH (apktool.jar path)")
     if not APKSIGNER:
         missing.append("apksigner (verify Android SDK install, ANDROID_SDK_PATH, and BUILD_TOOLS_VERSION)")
     if missing:
